@@ -43,7 +43,7 @@
 
       async init() {
         await this.loadImage()
-        // this.initBoard(10)
+        this.initBoard(10)
         this.initCake(this.cvs.width - this.cake.h)
         this.initRole(this.cvs.width - 10)
         this.paint()
@@ -60,6 +60,10 @@
         this.cat1.src = './cat1.png'
         this.cat2.src = './cat2.png'
         this.bg.src = './bg.jpg'
+        this.ctx.font = '30px "微软雅黑"'
+        this.ctx.textAlign = 'center'
+        this.ctx.fillStyle = 'skyblue'
+        this.ctx.fillText('Loading...', this.cvs.width / 2, this.cvs.width / 2)
         return Promise.all([
           this.load(this.cakeImage),
           this.load(this.cat1),
