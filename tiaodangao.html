@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    body { margin: 0; }
+    #canvas {
+      border-bottom: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    class Game {
+      constructor() {
+        this.cvs = document.querySelector('#canvas')
+        if (window.innerWidth > 600) {
+          window.innerWidth = 600
+        }
+        this.cvs.width = window.innerWidth
+        this.cvs.height = this.cvs.width
+        this.ctx = this.cvs.getContext('2d')
+        this.cake = { x: 0, y: 0, w: 50, h: 10 }  // x和y是位置，w和h是宽高
+        this.cakes = []
+        this.role = { x: 0, y: 0, t: 0 }
+        this.type = 'up'  // 上升过程或下落过程：up down
+        this.speed = 2.8
+        this.end = false
+        this.moving = false
+        this.movingY = 0
+        this.moveEnd = true
+        this.score = 0
+        this.scoreRatio = 1
+        this.showRatioText = false
+        this.init()
+      }
+
+      async init() {
+        await this.loadImage()
+        // this.initBoard(10)
+        this.initCake(this.cvs.width - this.cake.h)
+        this.initRole(this.cvs.width - 10)
+        this.paint()
+        this.listenerEvent()
+      }
+
+      // 加载图片
+      loadImage() {
+        this.cakeImage = new Image()
+        this.cat1 = new Image()
+        this.cat2 = new Image()
+        this.bg = new Image()
+        this.cakeImage.src = './cake.jpg'
+        this.cat1.src = './cat1.png'
+        this.cat2.src = './cat2.png'
+        this.bg.src = './bg.jpg'
+        return Promise.all([
+          this.load(this.cakeImage),
+          this.load(this.cat1),
+          this.load(this.cat2),
+          this.load(this.bg)
+        ])
+      }
+
+      load(image) {
+        return new Promise((resolve, reject) => {
+          image.onload = () => resolve()
+        })
+      }
+
+      // 绘画
+      paint() {
+        if (this.end) {
+          return
+        }
+        this.timer = setTimeout(() => {
+          this.ctx.clearRect(0, 0, this.cvs.width, this.cvs.width)
+          this.initBoard(10)
+          this.check()
+          !this.moving && this.paintCake()
+          this.paintRole()
+          this.paintScore()
+          this.paintReocrd()
+          if (this.moving) {
+            this.moveCake()
+            this.moveRole()
+          }
+          this.showRatioText && this.paintRatioText()
+          this.paint()
+        }, 10)
+      }
+
+      // 初始化蛋糕：也就是那个方块
+      initCake(y) {
+        this.cake.x = -this.cake.w
+        this.cake.y = y
+      }
+
+      // 初始化角色：也就是那个红色小球
+      initRole(y) {
+        this.role.x = this.cvs.width / 2
+        this.role.y = y
+        this.role.t = this.cvs.width - y
+      }
+
+      // 绘制角色：就是那个红色小球
+      paintRole() {
+        this.ctx.beginPath()
+        if (this.isClick) {
+          // 判断角色是否已到落地点（落地点可能在方块上）
+          if (this.role.y >= this.cvs.width - this.role.t && this.type === 'down') {
+            this.speed = 2.8
+            this.role.y = this.cvs.width - this.role.t
+            this.isClick = false
+            this.type = 'up'
+            return
+          }
+          this.role.y -= this.speed
+          if (this.speed === 0) {
+            this.speed += .1
+            this.type = 'up'
+          } else {
+            this.speed -= .1
+            this.type = 'down'
+          }
+        }
+        if (this.speed === 0 || this.speed >= 2.8) {
+          this.ctx.drawImage(this.cat1, this.role.x - 15, this.role.y - 20, 30, 30)
+        } else {
+          this.ctx.drawImage(this.cat2, this.role.x - 15, this.role.y - 20, 30, 30)
+        }
+      }
+
+      // 移动蛋糕
+      moveCake() {
+        const y = this.cakes.length > 10 ? 2 : 1
+        this.cakes = this.cakes.map(cake => {
+          return {
+            ...cake,
+            y: cake.y + y
+          }
+        })
+      }
+
+      // 移动角色
+      moveRole() {
+        const y = this.cakes.length > 10 ? 2 : 1
+        this.movingY += y
+        this.role.y += y
+      }
+
+      // 绘制蛋糕
+      paintCake() {
+        if (this.cake.x >= this.cvs.width) {
+          this.cake.x = -this.cake.w
+        }
+        this.cake.x ++
+        this.ctx.beginPath()
+        this.ctx.fillStyle = 'skyblue'
+        this.ctx.drawImage(this.cakeImage, this.cake.x, this.cake.y, this.cake.w, this.cake.h)
+      }
+
+      // 绘制已经跳上去的蛋糕
+      paintReocrd() {
+        this.cakes.forEach(cake => {
+          this.ctx.beginPath()
+          this.ctx.fillStyle = 'orange'
+          this.ctx.drawImage(this.cakeImage, cake.x, cake.y, this.cake.w, this.cake.h)
+        })
+      }
+
+      // 检测碰撞机制
+      check() {
+        if (
+          this.role.x + 5 >= this.cake.x &&
+          this.role.x - 5 <= this.cake.x + this.cake.w && 
+          this.role.y >= this.cake.y
+        ) {
+          if (this.type === 'down') {
+            if (this.cakes.length) {
+              // 增加判定范围，方便重叠蛋糕
+              const last = this.cakes[this.cakes.length - 1]
+              const range = 5
+              if (
+                (this.cake.x > last.x - range && this.cake.x < last.x + range) ||
+                (this.cake.x > last.x + last.w - range && this.cake.x < last.x + last.w + range)
+              ) {
+                this.scoreRatio += 1
+                this.cake.x = last.x
+                this.paintRatioText()
+              } else {
+                this.scoreRatio = 1
+              }
+            }
+            this.moveEnd = true
+            this.score += this.scoreRatio
+            this.cakes.push({ x: this.cake.x, y: this.cake.y })
+            // 移动蛋糕，以免叠太高了超出范围
+            if(this.cakes.length && this.cakes.length % 10 === 0 && this.moveEnd) {
+              this.moving = true
+              this.moveEnd = false
+              setTimeout(() => {
+                this.moving = false
+                this.cake.y += this.movingY
+                this.role.t -= this.movingY
+                this.movingY = 0
+              }, 550) 
+            }
+            this.initCake(this.cake.y - 10)
+            this.initRole(this.role.y - 10)
+          } else {
+            this.ctx.font = '30px "微软雅黑"'
+            this.ctx.textAlign = 'center'
+            this.ctx.fillStyle = 'red'
+            this.ctx.fillText('Game Over!', this.cvs.width / 2, this.cvs.width / 2)
+            clearTimeout(this.timer)
+            this.timer = null
+            this.end = true
+          }
+        }
+      }
+
+      // 倍率提示
+      paintRatioText() {
+        this.showRatioText = true
+        this.ctx.font = '15px "微软雅黑"'
+        this.ctx.textAlign = 'left'
+        this.ctx.fillStyle = 'red'
+        this.ctx.fillText('X' + this.scoreRatio, this.role.x + 30, this.role.y - 15)
+        setTimeout(() => {
+          this.showRatioText = false
+        }, 1e3)
+      }
+
+      // 修改分数
+      paintScore() {
+        this.ctx.font = '15px "微软雅黑"'
+        this.ctx.textAlign = 'left'
+        this.ctx.fillStyle = 'green'
+        this.ctx.fillText('得分：' + this.score.toString(), 10, 30)
+      }
+
+      // 监听事件
+      listenerEvent() {
+        document.addEventListener('mouseup', () => {
+          this.isClick = true
+        })
+        // document.addEventListener('touchstart', e => {
+        //   this.isClick = true
+        // })
+      }
+
+      // 初始化画布信息
+      initBoard(len) {
+        this.ctx.drawImage(this.bg, 0, 0, this.cvs.width, this.cvs.width)
+        return
+        const num = Math.floor(this.cvs.width / len)
+        for (let i = num ; i >= 0 ; i --) {
+          this.ctx.beginPath()
+          this.ctx.strokeStyle = '#ccc'
+          this.ctx.lineTo(i * len, 0)
+          this.ctx.lineTo(i * len, this.cvs.width)
+          this.ctx.stroke()
+          this.ctx.beginPath()
+          this.ctx.lineTo(0, i * len)
+          this.ctx.lineTo(this.cvs.width, i * len)
+          this.ctx.stroke()
+        }
+      }
+    }
+    
+    new Game()
+  </script>
+</body>
+</html>
